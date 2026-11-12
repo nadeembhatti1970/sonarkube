@@ -1,0 +1,6 @@
+apiVersion: v2
+name: external-secrets-store
+description: ClusterSecretStore for AWS Secrets Manager, backed by the External Secrets Operator Pod Identity
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

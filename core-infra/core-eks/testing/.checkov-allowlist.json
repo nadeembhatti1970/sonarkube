@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Deleting an EKS cluster destroys every workload running on it. Cluster, node group and KMS key deletions require an explicit, reviewed incident or decommission change and are never pre-approved.",
+  "allowed_deletes": []
+}

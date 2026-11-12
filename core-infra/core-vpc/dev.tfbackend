@@ -1,0 +1,16 @@
+# ---------------------------------------------------------------------------
+# Remote state configuration for the dev environment (core-vpc).
+#
+# Usage: terraform init -backend-config=dev.tfbackend
+#
+# This file contains no secrets: the bucket is private, encrypted with the
+# environment CMK and only reachable over TLS. Native S3 locking
+# (use_lockfile) replaces the legacy DynamoDB lock table and requires
+# Terraform >= 1.10.
+# ---------------------------------------------------------------------------
+bucket       = "sonarkube-dev-eu-west-1-tfstate"
+key          = "environments/dev/core-vpc/terraform.tfstate"
+region       = "eu-west-1"
+encrypt      = true
+kms_key_id   = "alias/sonarkube-dev-tfstate"
+use_lockfile = true

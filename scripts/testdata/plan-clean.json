@@ -1,0 +1,25 @@
+{
+  "format_version": "1.2",
+  "resource_changes": [
+    {
+      "address": "aws_s3_bucket.tfstate",
+      "module_address": "module.bootstrap",
+      "type": "aws_s3_bucket",
+      "name": "tfstate",
+      "change": {
+        "actions": ["create"],
+        "after": { "bucket": "sonarkube-dev-eu-west-1-tfstate" }
+      }
+    },
+    {
+      "address": "aws_kms_key.tfstate",
+      "module_address": "module.bootstrap",
+      "type": "aws_kms_key",
+      "name": "tfstate",
+      "change": {
+        "actions": ["no-op"],
+        "after": { "enable_key_rotation": true }
+      }
+    }
+  ]
+}

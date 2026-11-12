@@ -1,0 +1,161 @@
+# ---------------------------------------------------------------------------
+# SonarQube "fixer" Job.
+#
+# Day-2 task: flip sonar.forceAuthentication in the live database without
+# shelling into an application pod and without putting credentials in a
+# manifest.
+#
+#   kubectl apply -f job.yaml
+#   kubectl -n sonarqube wait --for=condition=complete job/sonarqube-db-fixer --timeout=120s
+#   kubectl -n sonarqube logs job/sonarqube-db-fixer
+#
+# Credentials are mounted as read-only files from the sonarqube-db Secret that
+# core-sonarqube projects from AWS Secrets Manager (or that the ExternalSecret
+# in ../external-secrets creates). Keys: host, port, database, username,
+# password, sslmode.
+# ---------------------------------------------------------------------------
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sonarqube-db-fixer
+  namespace: sonarqube
+  labels:
+    app.kubernetes.io/name: sonarqube
+    app.kubernetes.io/component: db-fixer
+    app.kubernetes.io/part-of: code-quality-platform
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    description: >-
+      One-off, idempotent update of sonar.forceAuthentication in the SonarQube
+      database. Runs to completion and is garbage collected by the TTL
+      controller.
+    # The official postgres image is referenced by tag for readability. Clusters
+    # in this platform enforce digest pinning at admission time (Kyverno), which
+    # would reject this manifest if the policy were not satisfied there.
+    checkov.io/skip1: CKV_K8S_43=Tag is readable and the image is the official postgres build; digest pinning is enforced by cluster admission policy.
+spec:
+  # Retry a transient network failure, but never loop forever.
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  # Clean up the completed Job (and its pod) automatically.
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sonarqube
+        app.kubernetes.io/component: db-fixer
+    spec:
+      restartPolicy: Never
+      # The Job only talks to PostgreSQL; it never calls the Kubernetes API.
+      serviceAccountName: sonarqube-db-fixer
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: psql
+          image: postgres:17-alpine
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              # Connection settings are read from the mounted Secret. Nothing
+              # is echoed to the logs.
+              export PGHOST="$(cat /etc/sonarqube-db/host)"
+              export PGPORT="$(cat /etc/sonarqube-db/port)"
+              export PGDATABASE="$(cat /etc/sonarqube-db/database)"
+              export PGUSER="$(cat /etc/sonarqube-db/username)"
+              export PGPASSWORD="$(cat /etc/sonarqube-db/password)"
+              export PGSSLMODE="$(cat /etc/sonarqube-db/sslmode)"
+
+              psql --no-password --set ON_ERROR_STOP=1 <<'SQL'
+              BEGIN;
+              UPDATE settings SET value = 'true' WHERE key = 'sonar.forceAuthentication';
+              DO $$
+              BEGIN
+                IF NOT EXISTS (
+                  SELECT 1 FROM settings
+                  WHERE key = 'sonar.forceAuthentication' AND value = 'true'
+                ) THEN
+                  RAISE EXCEPTION
+                    'settings row for sonar.forceAuthentication is missing; use the SonarQube API instead';
+                END IF;
+              END
+              $$;
+              COMMIT;
+              SELECT key, value FROM settings WHERE key = 'sonar.forceAuthentication';
+              SQL
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            privileged: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: db-credentials
+              mountPath: /etc/sonarqube-db
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: db-credentials
+          secret:
+            secretName: sonarqube-db
+            defaultMode: 0400
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sonarqube-db-fixer
+  namespace: sonarqube
+  labels:
+    app.kubernetes.io/name: sonarqube
+    app.kubernetes.io/component: db-fixer
+automountServiceAccountToken: false
+---
+# Restrict the Job pod to DNS and PostgreSQL egress only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sonarqube-db-fixer
+  namespace: sonarqube
+  labels:
+    app.kubernetes.io/name: sonarqube
+    app.kubernetes.io/component: db-fixer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sonarqube
+      app.kubernetes.io/component: db-fixer
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 5432

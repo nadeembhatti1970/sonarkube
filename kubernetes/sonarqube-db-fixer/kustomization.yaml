@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Job creates its own namespace-scoped ServiceAccount, so the namespace
+# must already exist (core-sonarqube creates it in AWS environments; use
+# `kubectl create namespace sonarqube` locally).
+namespace: sonarqube
+
+resources:
+  - job.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: code-quality-platform
+    includeSelectors: false

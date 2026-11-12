@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "The database is stateful. A plan that deletes aws_db_instance.sonarqube, its KMS keys or its final snapshot is never auto-approved; deletion requires disabling deletion_protection and a reviewed change window.",
+  "allowed_deletes": []
+}

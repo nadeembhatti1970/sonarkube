@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Resources the destroy guard may delete. Network teardown is a deliberate, reviewed operation: every subnet, NAT gateway and endpoint is removed together, so no individual destroy is pre-approved.",
+  "allowed_deletes": []
+}

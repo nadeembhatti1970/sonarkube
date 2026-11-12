@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# Checkov configuration for the sonarkube platform repository.
+#
+# Every suppression below is a deliberate architectural decision, not a
+# convenience. High and critical findings are never suppressed.
+#
+# Usage: checkov -d .
+# ---------------------------------------------------------------------------
+skip-check:
+  # Registry modules are pinned to exact published versions and the provider
+  # versions are pinned by .terraform.lock.hcl. Rewriting sources to raw git
+  # URLs with commit SHAs would break semantic version resolution and the
+  # checksum guarantees Terraform already enforces.
+  - CKV_TF_1
+
+  # Secrets Manager rotation:
+  #   * rds/master rotation is wired (aws_secretsmanager_secret_rotation) and
+  #     enabled per environment once a VPC-attached Lambda is supplied.
+  #   * sonarqube/admin rotation must be coordinated with the Helm
+  #     setAdminPassword job; it is a reviewed runbook, not an unattended
+  #     Lambda.
+  #   * kubernetes/kubeconfig stores no static credential (exec auth).
+  - CKV2_AWS_57
+
+  # Security groups are attached indirectly and the graph check cannot see it:
+  #   * database-clients is attached to EKS managed node groups via
+  #     vpc_security_group_ids in core-eks.
+  #   * vpc-endpoints is attached to every interface endpoint in core-vpc.
+  - CKV2_AWS_5
+
+  # S3 event notifications are not part of the state/log pipeline; consumers
+  # poll state through Terraform and CloudTrail is the audit source of truth.
+  - CKV2_AWS_62
+
+  # The access-log destination bucket cannot log into itself, and the state
+  # bucket already delivers server access logs to it.
+  - CKV_AWS_18
+
+  # Terraform state and access logs are single-region by design. Recovery is
+  # provided by versioning, the 90 day non-current retention window and the
+  # customer managed KMS key, which is cheaper and simpler than cross-region
+  # replication for a single-environment state bucket.
+  - CKV_AWS_144
+
+# High-entropy fixtures in the native HCL test suites are deterministic values
+# ("0123456789abcdef...") used to assert secret projection; they are not real
+# credentials and must never be treated as such.
+skip-path:
+  - core-infra/.*/testing/.*
+  # `sonar-secret.txt` is a required Kubernetes Secret key name in the
+  # SonarQube chart, not a credential. The base64 high-entropy heuristic flags
+  # it, and the file contains no secret values.
+  - helm/sonarqube-secrets/templates/externalsecret-admin.yaml

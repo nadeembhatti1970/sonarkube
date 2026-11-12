@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Secrets Manager records are deliberately protected by a recovery window. Deleting a secret (and its version history) is never pre-approved by this guard.",
+  "allowed_deletes": []
+}

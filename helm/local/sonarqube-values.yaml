@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------------------
+# Local SonarQube (Part 3), pointed at the local PostgreSQL service instead of
+# RDS. The shape of these values is identical to what Terraform renders in
+# core-sonarqube; only the host and the credential source differ.
+#
+#   helm upgrade --install sonarqube sonarqube/sonarqube \
+#     -n sonarqube -f helm/local/sonarqube-values.yaml \
+#     --set jdbcOverwrite.jdbcPassword="$DB_PASSWORD" --wait --timeout 15m
+#
+# For a secret-free install, omit jdbcPassword and create the secret instead:
+#   kubectl -n sonarqube create secret generic sonarqube-db \
+#     --from-literal=password="$DB_PASSWORD"
+# ---------------------------------------------------------------------------
+deploymentType: StatefulSet
+replicaCount: 1
+
+# The chart requires an explicit edition. Community Build is selected by
+# enabling community and leaving edition unset.
+community:
+  enabled: true
+
+# ClusterIP + kubectl port-forward works on Kind, Docker Desktop and minikube.
+# Set SERVICE_TYPE=NodePort in scripts/local-up.sh if you prefer direct node
+# access (Docker Desktop/minikube); the assigned nodePort is random.
+service:
+  type: ClusterIP
+  externalPort: 9000
+  internalPort: 9000
+
+jdbcOverwrite:
+  enabled: true
+  jdbcUrl: jdbc:postgresql://local-pg-postgresql:5432/sonarqube
+  jdbcUsername: sonar
+  jdbcSecretName: sonarqube-db
+  jdbcSecretPasswordKey: password
+
+# Local only: a fixed passcode keeps the demo logs readable. Never reuse it
+# outside a laptop.
+#
+# setAdminPassword is intentionally omitted so the local stack stays
+# re-installable: the first login uses SonarQube's bootstrap credentials
+# (admin / admin) and prompts for a new password.
+monitoringPasscode: "local-dev-passcode"
+
+persistence:
+  enabled: true
+  size: 5Gi
+  # Cluster default StorageClass (see helm/local/postgresql-values.yaml).
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+initSysctl:
+  enabled: true
+
+initFs:
+  enabled: true
+
+tests:
+  enabled: false

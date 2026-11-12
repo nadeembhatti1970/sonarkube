@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "description": "Self-test fixture: a reviewed pure delete is allowed, but a replace of the same address is still blocked unless the action is set to any.",
+  "allowed_deletes": [
+    {
+      "address": "aws_db_instance.sonarqube",
+      "action": "delete",
+      "reason": "self-test fixture"
+    }
+  ]
+}

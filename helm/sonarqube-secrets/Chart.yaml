@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sonarqube-secrets
+description: ExternalSecret resources that project SonarQube credentials from AWS Secrets Manager
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

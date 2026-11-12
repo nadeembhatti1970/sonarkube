@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Resources that the destroy guard is allowed to plan a structural delete for. The state bucket and its bootstrap KMS key are intentionally absent: deleting Terraform state must always require a human override.",
+  "allowed_deletes": []
+}

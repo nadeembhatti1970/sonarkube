@@ -1,0 +1,11 @@
+# ---------------------------------------------------------------------------
+# Remote state configuration for the dev environment (core-eks).
+#
+# Usage: terraform init -backend-config=dev.tfbackend
+# ---------------------------------------------------------------------------
+bucket       = "sonarkube-dev-eu-west-1-tfstate"
+key          = "environments/dev/core-eks/terraform.tfstate"
+region       = "eu-west-1"
+encrypt      = true
+kms_key_id   = "alias/sonarkube-dev-tfstate"
+use_lockfile = true

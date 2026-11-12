@@ -1,0 +1,5 @@
+# Name of the ClusterSecretStore that application ExternalSecrets reference.
+name: aws-secretsmanager
+
+# Region of the Secrets Manager endpoint.
+region: eu-west-1

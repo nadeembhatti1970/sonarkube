@@ -1,0 +1,183 @@
+# ---------------------------------------------------------------------------
+# Local PostgreSQL stand-in for RDS (Part 3).
+#
+# A plain StatefulSet using the official `postgres` image, pinned to a specific
+# patch and Alpine release. No Bitnami chart, no rolling tags, no chart
+# warnings.
+#
+# The credentials come from the same `sonarqube-db` Secret that the AWS stack
+# uses (created by scripts/local-up.sh):
+#   username = sonar, database = sonarqube, password = generated
+#
+#   kubectl -n sonarqube apply -f kubernetes/local/postgresql.yaml
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: local-pg-postgresql
+  namespace: sonarqube
+  labels:
+    app.kubernetes.io/name: local-postgresql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: code-quality-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: local-postgresql
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: local-pg
+  namespace: sonarqube
+  labels:
+    app.kubernetes.io/name: local-postgresql
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: code-quality-platform
+  annotations:
+    # The official postgres image must run as uid/gid 70 (the image's postgres
+    # user). A higher UID would break the entrypoint; the volume is scoped to
+    # this single local workload.
+    checkov.io/skip1: CKV_K8S_40=The postgres image requires uid 70; this is a local demo manifest.
+    checkov.io/skip2: CKV_K8S_43=Tag is pinned to a specific patch and distro release; digest pinning is enforced at admission in shared clusters.
+spec:
+  serviceName: local-pg-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: local-postgresql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: local-postgresql
+        app.kubernetes.io/component: database
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgresql
+          image: postgres:17.6-alpine3.22
+          imagePullPolicy: Always
+          args:
+            - -c
+            - max_connections=100
+            - -c
+            - shared_buffers=256MB
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            # Non-secret identity values; the password is read from a mounted
+            # secret file (POSTGRES_PASSWORD_FILE) rather than an env var.
+            - name: POSTGRES_USER
+              value: sonar
+            - name: POSTGRES_DB
+              value: sonarqube
+            - name: POSTGRES_PASSWORD_FILE
+              value: /etc/sonarqube-db/password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            privileged: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: home
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: credentials
+              mountPath: /etc/sonarqube-db
+              readOnly: true
+      volumes:
+        # Writable HOME for the postgres user while keeping the data directory
+        # on the PVC (nested mount takes precedence).
+        - name: home
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: credentials
+          secret:
+            secretName: sonarqube-db
+            defaultMode: 0440
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        # storageClassName: DEFAULT
+---
+# Only SonarQube application/fixer pods may reach PostgreSQL.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: local-pg-postgresql
+  namespace: sonarqube
+  labels:
+    app.kubernetes.io/name: local-postgresql
+    app.kubernetes.io/component: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: local-postgresql
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow any pod in this namespace (SonarQube, the fixer Job). The
+    # production environment restricts 5432 to the EKS node security group
+    # instead; label-based selectors here proved brittle across chart versions.
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432

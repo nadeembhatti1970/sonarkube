@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Deleting a Helm release removes the running code quality platform. Release and namespace deletions are never auto-approved; the PVC in particular must be backed up before any teardown.",
+  "allowed_deletes": []
+}

@@ -1,0 +1,26 @@
+{
+  "format_version": "1.2",
+  "resource_changes": [
+    {
+      "address": "aws_db_instance.sonarqube",
+      "module_address": "module.core-rds",
+      "type": "aws_db_instance",
+      "name": "sonarqube",
+      "change": {
+        "actions": ["delete"],
+        "before": { "identifier": "sonarkube-dev-sonarqube-pg" }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_metric_alarm.cpu_high",
+      "module_address": "module.core-rds",
+      "type": "aws_cloudwatch_metric_alarm",
+      "name": "cpu_high",
+      "change": {
+        "actions": ["update"],
+        "before": { "threshold": 80 },
+        "after": { "threshold": 90 }
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# Namespace where the ExternalSecrets are created.
+namespace: sonarqube
+
+# ClusterSecretStore created by core-external-secrets.
+storeName: aws-secretsmanager
+
+# How often the operator re-reads the secrets. Rotation in Secrets Manager is
+# picked up within this window without a Terraform apply.
+refreshInterval: 1h
+
+database:
+  # JSON secret written by core-rds:
+  # host, port, database, username, password, sslmode, jdbc_url, engine
+  secretName: sonarkube-dev/sonarqube/database
+  targetName: sonarqube-db
+
+admin:
+  passwordSecretName: sonarkube-dev/sonarqube/admin-password
+  currentPasswordSecretName: sonarkube-dev/sonarqube/admin-current-password
+  monitoringPasscodeSecretName: sonarkube-dev/sonarqube/monitoring-passcode
+  serverSecretKeySecretName: sonarkube-dev/sonarqube/server-secret-key
+  targetName: sonarqube-admin

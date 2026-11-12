@@ -1,0 +1,16 @@
+{
+  "format_version": "1.2",
+  "resource_changes": [
+    {
+      "address": "aws_db_instance.sonarqube",
+      "module_address": "module.core-rds",
+      "type": "aws_db_instance",
+      "name": "sonarqube",
+      "change": {
+        "actions": ["delete", "create"],
+        "before": { "instance_class": "db.m6g.large" },
+        "after": { "instance_class": "db.m6g.xlarge" }
+      }
+    }
+  ]
+}

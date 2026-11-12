@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Self-test fixture: an empty allowlist must block every destructive action.",
+  "allowed_deletes": []
+}

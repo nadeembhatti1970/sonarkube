@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Deleting the External Secrets Operator removes the runtime secret sync path for every workload. Its Helm releases, IAM role and Pod Identity association are never pre-approved for deletion.",
+  "allowed_deletes": []
+}
