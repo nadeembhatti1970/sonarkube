@@ -32,16 +32,46 @@ not on the first apply (ESO installs them during apply). The store is applied by
 Helm after the operator release, so a clean install happens in one pass. The
 same pattern is used for the SonarQube ExternalSecrets.
 
-## Usage
+## Usage, validation and tests
 
-Apply **after** `core-eks` and `core-secretsmanager`, and **before**
-`core-sonarqube`:
+Requires the `core-eks` and `core-secretsmanager` states to exist. Apply it after those layers and **before `core-sonarqube`**; the Helm provider talks to the private EKS endpoint, so run from inside the VPC.
+
+Run these commands from this module directory. State configuration comes from
+`dev.tfbackend` (where applicable); environment inputs come from `dev.tfvars`.
 
 ```bash
+# 1. Initialise the partial S3 backend
 terraform init -backend-config=dev.tfbackend
-terraform plan  -var-file=dev.tfvars
+
+# 2. Check formatting and configuration
+terraform fmt -check -recursive .
+terraform validate
+
+# 3. Plan with the environment inputs
+#    (requires AWS credentials; later layers also need their upstream states)
+terraform plan -var-file=dev.tfvars -out=tfplan
+
+# 4. Run the native tests (mocked providers, no AWS calls)
+terraform test -test-directory=testing
+
+# 5. Static analysis: run from the repository root so .checkov.yaml applies
+#    (from this module directory: cd ../.. first)
+checkov -d core-infra/core-external-secrets
+
+# 6. Apply the reviewed plan
+terraform apply tfplan
+# or, without a saved plan:
 terraform apply -var-file=dev.tfvars
 ```
+
+The repository-level wrappers run the same gates across all modules:
+
+```bash
+./scripts/validate.sh                        # fmt, validate, secret hygiene, checkov and tests
+./scripts/plan-guard.sh core-infra/core-external-secrets               # plan JSON, Checkov terraform_plan and destroy gate
+```
+
+`plan-guard.sh` needs AWS credentials and state access; `terraform test` does not.
 
 ## Key inputs
 

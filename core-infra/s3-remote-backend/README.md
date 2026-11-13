@@ -23,13 +23,47 @@ contains only bucket names, ARNs and key IDs.
 DynamoDB locking is intentionally absent: every `dev.tfbackend` uses native S3
 locking (`use_lockfile = true`, Terraform >= 1.10).
 
-## Usage
+## Usage, validation and tests
+
+Run this module **once per account/environment before any other module**. It uses local state by design, so there is no `dev.tfbackend`; `dev.tfvars` still holds the environment inputs. Archive the resulting `terraform.tfstate` in your secure store.
+
+Run these commands from this module directory. Environment inputs come from `dev.tfvars`.
 
 ```bash
+# 1. Initialise local state (the bootstrap module cannot use the backend it creates)
 terraform init
-terraform plan  -var-file=dev.tfvars
+
+# 2. Check formatting and configuration
+terraform fmt -check -recursive .
+terraform validate
+
+# 3. Plan with the environment inputs
+#    (requires AWS credentials)
+terraform plan -var-file=dev.tfvars -out=tfplan
+
+# 4. Run the native tests (mocked providers, no AWS calls)
+terraform test -test-directory=testing
+
+# 5. Static analysis: run from the repository root so .checkov.yaml applies
+#    (from this module directory: cd ../.. first)
+checkov -d core-infra/s3-remote-backend
+
+# 6. Apply the reviewed plan
+terraform apply tfplan
+# or, without a saved plan:
 terraform apply -var-file=dev.tfvars
 ```
+
+The state bucket names are globally unique; adjust `dev.tfvars` if they are already taken.
+
+The repository-level wrappers run the same gates across all modules:
+
+```bash
+./scripts/validate.sh                        # fmt, validate, secret hygiene, checkov and tests
+./scripts/plan-guard.sh core-infra/s3-remote-backend               # plan JSON, Checkov terraform_plan and destroy gate
+```
+
+`plan-guard.sh` needs AWS credentials and state access; `terraform test` does not.
 
 ## Key inputs
 
@@ -47,15 +81,6 @@ terraform apply -var-file=dev.tfvars
 | `state_bucket_name` | Bucket for `dev.tfbackend` |
 | `kms_key_alias` | Alias for `kms_key_id` in `dev.tfbackend` |
 | `backend_configuration` | Map of values to paste into every `dev.tfbackend` |
-
-## Testing
-
-```bash
-terraform test -test-directory=testing
-```
-
-Five assertions cover versioning, public access, encryption, `force_destroy`
-and input validation.
 
 ## Reference
 

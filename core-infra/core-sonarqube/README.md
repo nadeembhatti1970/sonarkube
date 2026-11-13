@@ -89,17 +89,46 @@ Terraform state contains no credential material; the chart still consumes
 secrets by *reference* only (`jdbcSecretName`, `monitoringPasscodeSecretName`,
 `sonarSecretKey`, `setAdminPassword.passwordSecretName`).
 
-## Usage
+## Usage, validation and tests
+
+Requires `core-eks`, `core-rds`, `core-secretsmanager` and `core-external-secrets` states to exist. The cluster endpoint is private and the providers use `aws eks get-token`, so plan/apply must run from inside the VPC. Apply `core-external-secrets` before this module so the ExternalSecret CRDs and ClusterSecretStore exist.
+
+Run these commands from this module directory. State configuration comes from
+`dev.tfbackend` (where applicable); environment inputs come from `dev.tfvars`.
 
 ```bash
+# 1. Initialise the partial S3 backend
 terraform init -backend-config=dev.tfbackend
-terraform plan  -var-file=dev.tfvars
+
+# 2. Check formatting and configuration
+terraform fmt -check -recursive .
+terraform validate
+
+# 3. Plan with the environment inputs
+#    (requires AWS credentials; later layers also need their upstream states)
+terraform plan -var-file=dev.tfvars -out=tfplan
+
+# 4. Run the native tests (mocked providers, no AWS calls)
+terraform test -test-directory=testing
+
+# 5. Static analysis: run from the repository root so .checkov.yaml applies
+#    (from this module directory: cd ../.. first)
+checkov -d core-infra/core-sonarqube
+
+# 6. Apply the reviewed plan
+terraform apply tfplan
+# or, without a saved plan:
 terraform apply -var-file=dev.tfvars
 ```
 
-Requires `core-eks`, `core-rds` and `core-secretsmanager` state to exist and
-network access to the private EKS endpoint. Authentication uses
-`aws eks get-token` (no kubeconfig file required).
+The repository-level wrappers run the same gates across all modules:
+
+```bash
+./scripts/validate.sh                        # fmt, validate, secret hygiene, checkov and tests
+./scripts/plan-guard.sh core-infra/core-sonarqube               # plan JSON, Checkov terraform_plan and destroy gate
+```
+
+`plan-guard.sh` needs AWS credentials and state access; `terraform test` does not.
 
 ## Key inputs
 

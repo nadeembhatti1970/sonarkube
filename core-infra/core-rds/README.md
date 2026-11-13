@@ -47,13 +47,46 @@ during apply and is passed to AWS through write-only arguments only.
 Nothing is persisted in state or plan files. `./scripts/check-secret-hygiene.sh`
 fails the build if that ever changes.
 
-## Usage
+## Usage, validation and tests
+
+Requires the `core-vpc` and `core-secretsmanager` states to exist. Plan/apply need AWS credentials with access to both states and RDS.
+
+Run these commands from this module directory. State configuration comes from
+`dev.tfbackend` (where applicable); environment inputs come from `dev.tfvars`.
 
 ```bash
+# 1. Initialise the partial S3 backend
 terraform init -backend-config=dev.tfbackend
-terraform plan  -var-file=dev.tfvars
+
+# 2. Check formatting and configuration
+terraform fmt -check -recursive .
+terraform validate
+
+# 3. Plan with the environment inputs
+#    (requires AWS credentials; later layers also need their upstream states)
+terraform plan -var-file=dev.tfvars -out=tfplan
+
+# 4. Run the native tests (mocked providers, no AWS calls)
+terraform test -test-directory=testing
+
+# 5. Static analysis: run from the repository root so .checkov.yaml applies
+#    (from this module directory: cd ../.. first)
+checkov -d core-infra/core-rds
+
+# 6. Apply the reviewed plan
+terraform apply tfplan
+# or, without a saved plan:
 terraform apply -var-file=dev.tfvars
 ```
+
+The repository-level wrappers run the same gates across all modules:
+
+```bash
+./scripts/validate.sh                        # fmt, validate, secret hygiene, checkov and tests
+./scripts/plan-guard.sh core-infra/core-rds               # plan JSON, Checkov terraform_plan and destroy gate
+```
+
+`plan-guard.sh` needs AWS credentials and state access; `terraform test` does not.
 
 ## Key inputs
 
